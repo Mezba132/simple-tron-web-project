@@ -9,12 +9,6 @@ const getBalance = async (address) => {
   }
 };
 
-const hasSufficientBalance = async (address, amountTRX) => {
-  const balance = await getBalance(address);
-  const feeEstimate = 0.1;
-  return balance >= Number(amountTRX) + feeEstimate;
-};
-
 const checkResources = async (address) => {
   const account = await tronWeb.trx.getAccount(address);
   return {
@@ -43,6 +37,28 @@ const verifyTransactionFeasibility = async (senderAddress, amountTRX) => {
   };
 };
 
+const calculateFee = async (senderAddress) => {
+  const resources = await checkResources(senderAddress);
+  if (resources.bandwidth > 0) return 0;
+
+  try {
+    const chainParams = await tronWeb.trx.getChainParameters();
+    const feeParam = chainParams.find((p) => p.key === "getTransactionFee");
+    return feeParam ? tronWeb.fromSun(feeParam.value) : 0.1;
+  } catch (error) {
+    console.warn("⚠️ Fee API error, using fallback 0.1 TRX");
+    return 0.1;
+  }
+};
+
+const hasSufficientBalance = async (address, amountTRX) => {
+  const [balance, fee] = await Promise.all([
+    getBalance(address),
+    calculateFee(address),
+  ]);
+  const neededAmount = Number(amountTRX) + Number(fee);
+  return Number(balance) >= neededAmount;
+};
 module.exports = {
   getBalance,
   hasSufficientBalance,

@@ -1,6 +1,10 @@
 const readline = require("readline");
 const { createAccount } = require("./src/services/account");
 const { transferTRX } = require("./src/services/transfer");
+const tronWeb = require("./src/config/tronweb");
+const {
+  verifyTransactionFeasibility,
+} = require("./src/services/validate_amount");
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -24,16 +28,31 @@ async function handleInput(choice) {
       const account = await createAccount();
       console.log(`
       ✅ New Account Created!
-      Private Key: ${account.privateKey}
       Address: ${account.address.base58}
+      Private Key: ${account.privateKey}
       `);
       break;
 
     case "2":
-      const depositKey = await askQuestion("Enter your PRIVATE KEY: ");
-      const depositAmount = await askQuestion("Enter TRX amount: ");
-      const depositResult = await transferTRX(depositKey, depositAmount);
-      console.log("Deposit TX:", depositResult);
+      const fromKey = await askQuestion("Your PRIVATE KEY: ");
+      const depositAmt = await askQuestion("TRX amount: ");
+
+      // Verify balance before deposit
+      const senderAddress = tronWeb.address.fromPrivateKey(fromKey);
+      const depositCheck = await verifyTransactionFeasibility(
+        senderAddress,
+        depositAmt
+      );
+
+      if (!depositCheck.canProceed) {
+        console.log(
+          `❌ Insufficient funds. Need ${depositCheck.required} TRX (You have ${depositCheck.currentBalance})`
+        );
+      } else {
+        const result = await transferTRX(fromKey, depositAmt);
+        console.log(`✅ Deposit successful! TX ID: ${result.txId}`);
+        console.log(`Fee used: ${depositCheck.feeEstimate}`);
+      }
       break;
 
     case "3":

@@ -1,20 +1,34 @@
 const { TronWeb } = require("tronweb");
 const tronWeb = require("../config/tronweb");
+const {
+  hasSufficientBalance,
+  verifyTransactionFeasibility,
+} = require("./validate_amount");
 
 const transferTRX = async (fromPrivateKey, amount) => {
   try {
-    const depositAddress = process.env.DEPOSIT_ADDRESS;
-    const userTronWeb = new TronWeb({
-      fullHost: "https://api.shasta.trongrid.io",
-      privateKey: fromPrivateKey,
-    });
-
-    const transaction = await userTronWeb.trx.sendTransaction(
-      depositAddress,
-      tronWeb.toSun(amount)
+    const fromAddress = tronWeb.address.fromPrivateKey(fromPrivateKey);
+    const sufficientAmount = await verifyTransactionFeasibility(
+      fromAddress,
+      amount
     );
 
-    return transaction;
+    // Check balance
+    if (!sufficientAmount.canProceed) {
+      throw new Error("Insufficient balance for deposit + fees");
+    }
+
+    const transaction = await tronWeb.trx.sendTransaction(
+      process.env.DEPOSIT_ADDRESS,
+      tronWeb.toSun(amount),
+      fromPrivateKey
+    );
+
+    return {
+      success: true,
+      txId: transaction.txid,
+      fee: "0.1 TRX (estimated)",
+    };
   } catch (error) {
     throw new Error(`Transfer failed: ${error.message}`);
   }
