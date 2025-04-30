@@ -12,18 +12,18 @@ const tronWeb = new TronWeb({
   privateKey: process.env.PRIVATE_KEY,
 });
 
-(async () => {
-  try {
-    const currentBlock = await tronWeb.trx.getCurrentBlock();
-    console.log("");
-    console.log(
-      "✓ Connected to TronGrid. Current block number:",
-      currentBlock.block_header.raw_data.number
-    );
-  } catch (error) {
-    console.error("❌ Connection failed:", error.message);
-    process.exit(1);
-  }
-})();
+// (async () => {
+//   try {
+//     const currentBlock = await tronWeb.trx.getCurrentBlock();
+//     console.log("");
+//     console.log(
+//       "✓ Connected to TronGrid. Current block number:",
+//       currentBlock.block_header.raw_data.number
+//     );
+//   } catch (error) {
+//     console.error("❌ Connection failed:", error.message);
+//     process.exit(1);
+//   }
+// })();
 
 module.exports = tronWeb;

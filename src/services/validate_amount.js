@@ -1,4 +1,5 @@
 const tronWeb = require("../config/tronweb");
+require("dotenv").config();
 
 const getBalance = async (address) => {
   try {
@@ -61,14 +62,65 @@ const getEnergyAndBandwidthPriceInSun = async () => {
   }
 };
 
+const getUnsignedTx = async (fromAddress, toAddress, amount) => {
+  const amountInSun = (
+    BigInt(Number(amount)) *
+    BigInt(10) ** BigInt(18)
+  ).toString();
+
+  const parameter = [
+    { type: "address", value: toAddress },
+    { type: "uint256", value: amountInSun },
+  ];
+
+  // Build the transaction
+  const response = await tronWeb.transactionBuilder.triggerSmartContract(
+    process.env.CONTRACT_ADDRESS_SHASTA,
+    "transfer(address,uint256)",
+    {
+      feeLimit: 100_000_000, // 100 TRX
+      callValue: 0,
+    },
+    parameter,
+    fromAddress
+  );
+
+  return energyInfo;
+};
+
+async function estimateEnergyForTransfer(contractAddress, toAddress, amount) {
+  const result = await tronWeb.transactionBuilder.estimateEnergy(
+    contractAddress,
+    "transfer(address,uint256)",
+    {},
+    [
+      { type: "address", value: toAddress },
+      { type: "uint256", value: amount },
+    ]
+  );
+
+  if (!result.result.result) {
+    throw new Error("Estimation failed");
+  }
+
+  return result.energy_required;
+}
+
 const getEstimateFee = async () => {
-  const [energyAndBandwidthPriceInSun, accountResources] = await Promise.all([
-    getEnergyAndBandwidthPriceInSun(),
-    checkResources(process.env.DEPOSIT_ADDRESS),
-  ]);
+  const [energyAndBandwidthPriceInSun, accountResources, unsignedTx] =
+    await Promise.all([
+      getEnergyAndBandwidthPriceInSun(),
+      getBandwidth(process.env.DEPOSIT_ADDRESS),
+      getUnsignedTx(
+        "TTKZwdpEATsDxQfxVKcJkJQnPabZvsoRqz",
+        "TGJE9emwgqCvEzsUxpyuLtq5JoY7dgKS6x",
+        50
+      ),
+    ]);
 
   console.log("energyAndBandwidthPriceInSun", energyAndBandwidthPriceInSun);
   console.log("accountResources", accountResources);
+  console.log("unsignedTx", unsignedTx);
 
   return {
     energyAndBandwidthPriceInSun,
