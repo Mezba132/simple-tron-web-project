@@ -1,8 +1,5 @@
 const tronWeb = require("../config/tronweb");
-const {
-  hasSufficientBalance,
-  verifyTransactionFeasibility,
-} = require("./validate_amount");
+const { verifyTransactionFeasibility } = require("./validate_amount");
 
 const transferTRX = async (fromPrivateKey, amount) => {
   try {

@@ -5,6 +5,7 @@ const { transferTRC20 } = require("./src/services/transfer_token");
 const tronWeb = require("./src/config/tronweb");
 const {
   verifyTransactionFeasibility,
+  getEstimateFee,
 } = require("./src/services/validate_amount");
 
 const rl = readline.createInterface({
@@ -19,7 +20,8 @@ function showMenu() {
   1. Create Account
   2. Transfer TRX
   3. Transfer Token
-  4. Exit
+  4. Estimate Fee
+  5. Exit
   `);
 }
 
@@ -67,8 +69,14 @@ async function handleInput(choice) {
         depositTokenAmnt
       );
       console.log(`✅ Token Deposit successful! TX ID: ${result}`);
+      break;
 
     case "4":
+      const feeEstimate = await getEstimateFee();
+      console.log(`Estimated fee: ${feeEstimate}`);
+      break;
+
+    case "5":
       console.log("👋 Exiting...");
       process.exit(0);
 

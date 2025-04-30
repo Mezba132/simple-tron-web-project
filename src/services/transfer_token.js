@@ -15,7 +15,7 @@ async function transferTRC20(fromAddress, toAddress, amount) {
 
     // Build the transaction
     const response = await tronWeb.transactionBuilder.triggerSmartContract(
-      process.env.CONTRACT_ADDRESS,
+      process.env.CONTRACT_ADDRESS_SHASTA,
       "transfer(address,uint256)",
       {
         feeLimit: 100_000_000, // 100 TRX

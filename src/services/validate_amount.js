@@ -9,23 +9,29 @@ const getBalance = async (address) => {
   }
 };
 
-const checkResources = async (address) => {
-  const account = await tronWeb.trx.getAccount(address);
-  return {
-    bandwidth: account.bandwidth || 0,
-    energy:
-      account.account_resource?.frozen_balance_for_energy?.frozen_balance || 0,
-    freeNetLimit: account.free_net_limit || 0,
-  };
+const getBandwidth = async (address) => {
+  try {
+    return tronWeb.trx.getBandwidth(address);
+  } catch (error) {
+    throw new Error(`Bandwidth check failed: ${error.message}`);
+  }
+};
+
+const getBandwidthPrices = async () => {
+  try {
+    return tronWeb.trx.getBandwidthPrices();
+  } catch (error) {
+    throw new Error(`Bandwidth check failed: ${error.message}`);
+  }
 };
 
 const verifyTransactionFeasibility = async (senderAddress, amountTRX) => {
-  const [balance, resources] = await Promise.all([
+  const [balance, availBandwidth] = await Promise.all([
     getBalance(senderAddress),
-    checkResources(senderAddress),
+    getBandwidth(senderAddress),
   ]);
 
-  const feeEstimate = resources.bandwidth > 0 ? 0 : 0.1;
+  const feeEstimate = availBandwidth > 0 ? 0 : 0.1;
   const totalCost = Number(amountTRX) + feeEstimate;
 
   return {
@@ -37,31 +43,41 @@ const verifyTransactionFeasibility = async (senderAddress, amountTRX) => {
   };
 };
 
-const calculateFee = async (senderAddress) => {
-  const resources = await checkResources(senderAddress);
-  if (resources.bandwidth > 0) return 0;
-
+const getEnergyAndBandwidthPriceInSun = async () => {
   try {
     const chainParams = await tronWeb.trx.getChainParameters();
-    const feeParam = chainParams.find((p) => p.key === "getTransactionFee");
-    return feeParam ? tronWeb.fromSun(feeParam.value) : 0.1;
+    const energyPriceInSun = chainParams.find(
+      (param) => param.key === "getEnergyFee"
+    )?.value;
+
+    const bandWidthPriceInSun = chainParams.find(
+      (param) => param.key === "getTransactionFee"
+    )?.value;
+
+    if (!energyPriceInSun || !bandWidthPriceInSun) throw new Error("");
+    return { energyPriceInSun, bandWidthPriceInSun };
   } catch (error) {
-    console.warn("⚠️ Fee API error, using fallback 0.1 TRX");
-    return 0.1;
+    throw new Error("Failed to get energy and bandwidth fee");
   }
 };
 
-const hasSufficientBalance = async (address, amountTRX) => {
-  const [balance, fee] = await Promise.all([
-    getBalance(address),
-    calculateFee(address),
+const getEstimateFee = async () => {
+  const [energyAndBandwidthPriceInSun, accountResources] = await Promise.all([
+    getEnergyAndBandwidthPriceInSun(),
+    checkResources(process.env.DEPOSIT_ADDRESS),
   ]);
-  const neededAmount = Number(amountTRX) + Number(fee);
-  return Number(balance) >= neededAmount;
+
+  console.log("energyAndBandwidthPriceInSun", energyAndBandwidthPriceInSun);
+  console.log("accountResources", accountResources);
+
+  return {
+    energyAndBandwidthPriceInSun,
+    accountResources,
+  };
 };
+
 module.exports = {
   getBalance,
-  hasSufficientBalance,
-  checkResources,
   verifyTransactionFeasibility,
+  getEstimateFee,
 };
