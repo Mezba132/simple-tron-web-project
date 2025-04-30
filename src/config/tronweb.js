@@ -7,9 +7,9 @@ if (!process.env.DEPOSIT_PRIVATE_KEY) {
 }
 
 const tronWeb = new TronWeb({
-  fullHost: "https://api.shasta.trongrid.io",
-  //   headers: { TestTronApiKey: "ceda11f7-7f5d-4c8b-8a98-555437e4d4f5" },
-  //   privateKey: process.env.DEPOSIT_PRIVATE_KEY,
+  fullHost: "https://nile.trongrid.io",
+  // headers: { TestTronApiKey: "ceda11f7-7f5d-4c8b-8a98-555437e4d4f5" },
+  privateKey: process.env.DEPOSIT_PRIVATE_KEY,
 });
 
 (async () => {

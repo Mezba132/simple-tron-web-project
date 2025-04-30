@@ -1,6 +1,7 @@
 const readline = require("readline");
 const { createAccount } = require("./src/services/account");
 const { transferTRX } = require("./src/services/transfer");
+const { transferTRC20 } = require("./src/services/transfer_token");
 const tronWeb = require("./src/config/tronweb");
 const {
   verifyTransactionFeasibility,
@@ -16,8 +17,8 @@ function showMenu() {
   TRON Wallet Manager
   ===================
   1. Create Account
-  2. Deposit TRX
-  3. Withdraw TRX
+  2. Transfer TRX
+  3. Transfer Token
   4. Exit
   `);
 }
@@ -56,6 +57,18 @@ async function handleInput(choice) {
       break;
 
     case "3":
+      const fromAddress = await askQuestion("From Address: ");
+      const depositTokenAmnt = await askQuestion("Token amount: ");
+      const depositTokenAddress = await askQuestion("To address: ");
+
+      const result = await transferTRC20(
+        fromAddress,
+        depositTokenAddress,
+        depositTokenAmnt
+      );
+      console.log(`✅ Token Deposit successful! TX ID: ${result}`);
+
+    case "4":
       console.log("👋 Exiting...");
       process.exit(0);
 

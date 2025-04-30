@@ -1,4 +1,3 @@
-const { TronWeb } = require("tronweb");
 const tronWeb = require("../config/tronweb");
 const {
   hasSufficientBalance,
