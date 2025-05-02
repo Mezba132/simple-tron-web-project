@@ -6,6 +6,7 @@ const tronWeb = require("./src/config/tronweb");
 const {
   verifyTransactionFeasibility,
   getEstimateFee,
+  calculateRequiredBandwidthAndEnergy,
 } = require("./src/services/validate_amount");
 
 const rl = readline.createInterface({
@@ -21,7 +22,8 @@ function showMenu() {
   2. Transfer TRX
   3. Transfer Token
   4. Estimate Fee
-  5. Exit
+  5. Estimate Bandwidth and Energy
+  6. Exit
   `);
 }
 
@@ -77,6 +79,15 @@ async function handleInput(choice) {
       break;
 
     case "5":
+      const feeEstimateBand = await calculateRequiredBandwidthAndEnergy(
+        "TU2SLa6PxwRtKyWz1PgfKAhCVQT9tEBFfk",
+        "TZ6UZAVE1szEGmViFDnzjbKVGYNoHz7vjF",
+        50
+      );
+      console.log(`Estimated fee: ${feeEstimateBand}`);
+      break;
+
+    case "6":
       console.log("👋 Exiting...");
       process.exit(0);
 
@@ -94,7 +105,7 @@ function askQuestion(question) {
 async function main() {
   while (true) {
     showMenu();
-    const choice = await askQuestion("Choose an option (1-4): ");
+    const choice = await askQuestion("Choose an option (1-6): ");
     await handleInput(choice);
   }
 }

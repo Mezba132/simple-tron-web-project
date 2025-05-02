@@ -18,12 +18,51 @@ const getBandwidth = async (address) => {
   }
 };
 
+const getRequiredEnergy = async (toAddress, amount) => {
+  try {
+    const amountInSun = (
+      BigInt(Number(amount)) *
+      BigInt(10) ** BigInt(18)
+    ).toString();
+    const result = await tronWeb.transactionBuilder.estimateEnergy(
+      process.env.CONTRACT_ADDRESS_SHASTA,
+      "transfer(address,uint256)",
+      {},
+      [
+        { type: "address", value: toAddress },
+        { type: "uint256", value: amountInSun },
+      ]
+    );
+    return result;
+  } catch (error) {
+    throw new Error(`Failed to calculate fee: ${error.message}`);
+  }
+};
+
 const getBandwidthPrices = async () => {
   try {
     return tronWeb.trx.getBandwidthPrices();
   } catch (error) {
     throw new Error(`Bandwidth check failed: ${error.message}`);
   }
+};
+
+const getEnergyPrices = async () => {
+  try {
+    return tronWeb.trx.getEnergyPrices();
+  } catch (error) {
+    throw new Error(`Bandwidth check failed: ${error.message}`);
+  }
+};
+
+const frozenEnergy = async () => {
+  const freezeResult = await tronWeb.trx.freezeBalance(
+    25_000_000, // Amount in SUN (1 TRX = 1,000,000 SUN)
+    3,
+    "ENERGY"
+  );
+  console.log("Freeze TX ID:", freezeResult.txid);
+  return freezeResult;
 };
 
 const verifyTransactionFeasibility = async (senderAddress, amountTRX) => {
@@ -62,74 +101,115 @@ const getEnergyAndBandwidthPriceInSun = async () => {
   }
 };
 
-const getUnsignedTx = async (fromAddress, toAddress, amount) => {
-  const amountInSun = (
-    BigInt(Number(amount)) *
-    BigInt(10) ** BigInt(18)
-  ).toString();
-
-  const parameter = [
-    { type: "address", value: toAddress },
-    { type: "uint256", value: amountInSun },
-  ];
-
-  // Build the transaction
-  const response = await tronWeb.transactionBuilder.triggerSmartContract(
-    process.env.CONTRACT_ADDRESS_SHASTA,
-    "transfer(address,uint256)",
-    {
-      feeLimit: 100_000_000, // 100 TRX
-      callValue: 0,
-    },
-    parameter,
-    fromAddress
-  );
-
-  return energyInfo;
-};
-
-async function estimateEnergyForTransfer(contractAddress, toAddress, amount) {
-  const result = await tronWeb.transactionBuilder.estimateEnergy(
-    contractAddress,
-    "transfer(address,uint256)",
-    {},
-    [
-      { type: "address", value: toAddress },
-      { type: "uint256", value: amount },
-    ]
-  );
-
-  if (!result.result.result) {
-    throw new Error("Estimation failed");
-  }
-
-  return result.energy_required;
-}
-
 const getEstimateFee = async () => {
-  const [energyAndBandwidthPriceInSun, accountResources, unsignedTx] =
+  const [energyAndBandwidthPriceInSun, getRequiredBandwidthAndEnergy] =
     await Promise.all([
       getEnergyAndBandwidthPriceInSun(),
-      getBandwidth(process.env.DEPOSIT_ADDRESS),
-      getUnsignedTx(
-        "TTKZwdpEATsDxQfxVKcJkJQnPabZvsoRqz",
-        "TGJE9emwgqCvEzsUxpyuLtq5JoY7dgKS6x",
+      calculateRequiredBandwidthAndEnergy(
+        "TU2SLa6PxwRtKyWz1PgfKAhCVQT9tEBFfk",
+        "TZ6UZAVE1szEGmViFDnzjbKVGYNoHz7vjF",
         50
       ),
     ]);
-
-  console.log("energyAndBandwidthPriceInSun", energyAndBandwidthPriceInSun);
-  console.log("accountResources", accountResources);
-  console.log("unsignedTx", unsignedTx);
+  const energyCostTRX =
+    (getRequiredBandwidthAndEnergy.energyDeficit *
+      energyAndBandwidthPriceInSun.energyPriceInSun) /
+    1e6;
+  const bandwidthCostTRX =
+    (getRequiredBandwidthAndEnergy.bandwidthDeficit *
+      energyAndBandwidthPriceInSun.bandWidthPriceInSun) /
+    1e6;
+  const totalCostTRX = energyCostTRX + bandwidthCostTRX;
+  console.log("energyCostTRX", energyCostTRX);
+  console.log("bandwidthCostTRX", bandwidthCostTRX);
+  console.log("totalCostTRX", totalCostTRX);
 
   return {
     energyAndBandwidthPriceInSun,
-    accountResources,
   };
+};
+
+const calculateRequiredBandwidthAndEnergy = async (
+  fromAddress,
+  toAddress,
+  amount
+) => {
+  try {
+    const amountInSun = (
+      BigInt(Number(amount)) *
+      BigInt(10) ** BigInt(18)
+    ).toString();
+
+    const { transaction } =
+      await tronWeb.transactionBuilder.triggerSmartContract(
+        process.env.CONTRACT_ADDRESS_SHASTA,
+        "transfer(address,uint256)",
+        {
+          feeLimit: 100000000,
+          callValue: 0,
+        },
+        [
+          { type: "address", value: toAddress },
+          { type: "uint256", value: amountInSun },
+        ]
+      );
+
+    const { energy_required } =
+      await tronWeb.transactionBuilder.triggerSmartContract(
+        process.env.CONTRACT_ADDRESS_SHASTA,
+        "transfer(address,uint256)",
+        {
+          feeLimit: 100000000,
+          callValue: 0,
+          estimateEnergy: true,
+        },
+        [
+          { type: "address", value: toAddress },
+          { type: "uint256", value: amountInSun },
+        ]
+      );
+
+    const account = await tronWeb.trx.getAccount();
+
+    const frozenEnergy =
+      account.frozenV2?.find((f) => f.type === "ENERGY")?.amount || 0;
+    const energyUsage = account.account_resource?.energy_usage || 0;
+    const availableEnergy = Math.max(frozenEnergy - energyUsage, 0);
+    console.log(
+      "availableEnergy : ",
+      availableEnergy,
+      " energy_required : ",
+      energy_required
+    );
+    const energyDeficit = Math.max(energy_required - availableEnergy, 0);
+
+    const transactionSizeBytes = Buffer.from(
+      transaction.raw_data_hex,
+      "hex"
+    ).length;
+
+    // Step 3: Calculate bandwidth cost in TRX
+    const availableBandwidth = await tronWeb.trx.getBandwidth(fromAddress);
+    console.log("availableBandwidth", availableBandwidth);
+    const bandwidthDeficit = Math.max(
+      availableBandwidth - transactionSizeBytes,
+      0
+    );
+
+    return {
+      requiredBandwidth: transactionSizeBytes,
+      energy_required: energy_required,
+      bandwidthDeficit: bandwidthDeficit,
+      energyDeficit: energyDeficit,
+    };
+  } catch (error) {
+    throw new Error(`Calculation failed: ${error.message}`);
+  }
 };
 
 module.exports = {
   getBalance,
   verifyTransactionFeasibility,
   getEstimateFee,
+  calculateRequiredBandwidthAndEnergy,
 };

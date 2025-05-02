@@ -26,3 +26,56 @@ to address : TGJE9emwgqCvEzsUxpyuLtq5JoY7dgKS6x
 
 shasta DKFT contract address : TESJD4A4yy527kcebiKQfZFaxjznytJoLY
 nile dkft contract address : TMyH6saKxHPowTs2JNLpiw1dnB8YLnphQP
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+const tronWeb = new TronWeb({ fullNode: 'https://api.trongrid.io', solidityNode: 'https://api.trongrid.io', eventServer: 'https://api.trongrid.io', privateKey: '...' });
+
+async function estimateWithdrawalFee(fromAddress, tokenAddress, toAddress, amount) {
+    // Fetch user's current resources
+    const account = await tronWeb.trx.getAccount(fromAddress);
+    const availableEnergy = account.energy || 0;
+    const availableFreeBandwidth = Math.max((account.free_net_limit || 0) - (account.free_net_usage || 0), 0);
+    const availableStakedBandwidth = Math.max((account.net_limit || 0) - (account.net_usage || 0), 0);
+    const totalAvailableBandwidth = availableFreeBandwidth + availableStakedBandwidth;
+
+    // Estimate energy required by triggering the contract call
+    const triggerResult = await tronWeb.transactionBuilder.triggerSmartContract(
+        tokenAddress,
+        'transfer(address,uint256)',
+        {
+            feeLimit: 100000000,
+            callValue: 0,
+            from: fromAddress,
+            estimateEnergy: true
+        },
+        [
+            { type: 'address', value: toAddress },
+            { type: 'uint256', value: amount.toString() }
+        ]
+    );
+
+    const energyRequired = triggerResult.energy_required;
+    const transaction = triggerResult.transaction;
+
+    // Calculate bandwidth required (transaction size in bytes)
+    const rawDataBytes = Buffer.from(transaction.raw_data_hex, 'hex').length;
+    const bandwidthRequired = rawDataBytes;
+
+    // Calculate deficits
+    const energyDeficit = Math.max(energyRequired - availableEnergy, 0);
+    const bandwidthDeficit = Math.max(bandwidthRequired - totalAvailableBandwidth, 0);
+
+    // Convert deficits to TRX
+    const energyCostTrx = (energyDeficit * 420) / 1e6; // 420 SUN per energy
+    const bandwidthCostTrx = (bandwidthDeficit * 1000) / 1e6; // 1000 SUN per byte
+    const totalTrx = energyCostTrx + bandwidthCostTrx;
+
+    return totalTrx;
+}
+
+// Usage example
+estimateWithdrawalFee('TY...', 'TR7...', 'TRecipient...', 1000000)
+    .then(fee => console.log(`Estimated TRX fee: ${fee}`))
+    .catch(console.error);
